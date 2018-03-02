@@ -77,6 +77,8 @@ src/FILE
 # Least specific
 ```
 
+When a developer needs to add a new file, he must consider how generic this file is. The more generic the file is, the most the file should be in a least specific directory.
+
 #### Basic templating in staging
 ##### Variable file replacements
 In any source file, a special variable in the form `__VAR_NAME__` (two leading and trailing
@@ -91,17 +93,21 @@ return true. As an example, `echo 'first' && __DO_STUFF__ && echo 'last'` will p
 'last' correctly only if `__DO_SUFF__` returns true. A take-no-action override needs to have the
 content `/bin/true`, as an empty file will cause an error.
 
+Variables can be nested meaning `__DO_STUFF__` can contain some code including a reference to another variable like `__ANOTHER_VARIABLE__`.
+
 ##### Environment varable replacements
-In any source file, a special variable in the form `STAGE_REPLACE_WITH_ENV_VAR` (capital letters
-with underscores) can placed. Once all files are staged, the `STAGE_REPLACE_WITH_ENV_VAR` variable
+In any source file, a special variable in the form `STAGE_REPLACE_WITH_<ENV_VAR>` (capital letters
+with underscores) can placed. Once all files are staged, the `STAGE_REPLACE_WITH_<ENV_VAR>` variable
 will be replaced with the raw contents of the environment variable named `ENV_VAR`.
+
+A typical usage is to use ``STAGE_REPLACE_WITH_GENERIC_ARCH`` when you need to specify the building architecture.
 
 #### Staging development aids
 To practically aid developers, helpful tools have been built for staging:
  - To create all default staging directories: `make stage`
- - To create specific staging directory(-ies): `make FLAVORS_TO_BUILD=<flavorspec> stage`
- - Find the source of a staged file: `cd <staging> ; ./find-src <file-path>`
- - List of staged files and their sources: `<staging>/files-sources`
+ - To create specific staging directory(-ies): `make FLAVORS_TO_BUILD=<flavor> stage`
+ - Find the source of a staged file: `cd <staging_dir> ; ./find-src <file-path>`
+ - List of staged files and their sources: `<staging_dir>/files-sources`
  - List of all possible buildable flavors: `make show.flavors`
  - Show flavors affected by branch changes: `make flavors.modified`
  - Stage log: `stage.log`
@@ -115,8 +121,27 @@ user to define which flavors to operate on. Flavor specifications follow a stric
 declares what ceph-container source to use, what architecture to build for, and what container image
 to use as the base for the build. See `make help` for a full description.
 
+#### Building a single flavor
+Once the flavor is selected, just specify its name in the __FLAVORS_TO_BUILD__ and call the __build__ target like in :
+```
+sudo make FLAVORS_TO_BUILD=luminous,x86_64,centos,7,_,centos,7 build
+```
+
+#### Building multiple flavors
+Proceed as per the single one and separate them by a space like in :
+```
+sudo make FLAVORS_TO_BUILD="luminous,x86_64,centos,7,_,centos,7 kraken,x86_64,centos,7,_,centos,7"  build
+```
+
+If you want to build all possible images, just remove the __FLAVORS_TO_BUILD__ argument from the command line.
+
+If you want to build them in parallel, use the __-j__ flag as in
+```
+ sudo make -j4 FLAVORS_TO_BUILD="luminous,x86_64,centos,7,_,centos,7 kraken,x86_64,centos,7,_,centos,7"  build
+```
+
 #### Building images from staging
-It is possible to build container images directly from staging in the event that `make build` is not
+For developers, note that it is also possible to build container images directly from staging in the event that `make build` is not
 appealing. Simply stage the flavor(s) to be built, and then execute the desired build command for
 `daemon-base` and `daemon`.
 ```
@@ -132,10 +157,10 @@ specific files in order to reuse as much code as possible. Only specify specific
 absolutely apply only to the specific flavor(s) and not to others.
 
 ### Fixing a bug
-1. Stage the flavor on which the bug was found (`make FLAVORS_TO_BUILD=<bugged build> stage`).
+1. Stage the flavor on which the bug was found (`make FLAVORS_TO_BUILD=<bugged flavor> stage`).
 2. Use the `find-src` script or `files-sources` list to locate the bugged file's source location.
 3. Edit the source location to fix the bug.
-4. Build test versions of the images (`make FLAVORS_TO_BUILD=<bugged build> build`).
+4. Build test versions of the images (`make FLAVORS_TO_BUILD=<bugged flavor> build`).
 5. Test the images you built in your environment.
 6. Make a PR of your changes.
 
@@ -152,8 +177,15 @@ absolutely apply only to the specific flavor(s) and not to others.
 
 ### Adding a Ceph release
 Ideally, adding a new Ceph release is fairly easy. In the best case, all that needs done is adding
-flavors for the new Ceph version to the Makefile. At minimum, `ALL_BUILDABLE_FLAVORS` must be
+flavors for the new Ceph version to the Makefile. At minimum, __ALL_BUILDABLE_FLAVORS__ must be
 updated in the Makefile.
+
+Note the __$CEPH_VERSION__ variable usually used in ``__DOCKERFILE_INSTALL__`` to select a package repository like in ```echo "deb http://download.ceph.com/nfs-ganesha/deb-V2.5-stable/$CEPH_VERSION/ __OS_CODENAME__ main" \
+``` is substituted from the first field of the flavor name.
+
+In this example, ```luminous,x86_64,centos,7,_,centos,7```, ``$CEPH_VERSION`` will be set to __luminous__.
+
+Adding a new flavor name like ```mimic,x86_64,centos,7,_,centos,7``` is enough to create a new __mimic__ Ceph release.
 
 In the worst case, trying to make as few modifications as possible:
 1. Add flavors for new Ceph versions to the Makefile.
